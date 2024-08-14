@@ -1,50 +1,31 @@
 '''
 Changelog
 
-Aug 10 (init) -> Aug 14 (current)
+Aug 14 (feature-testing branch creation) -> Aug 14 (current)
 
-- Added a command line argument for the output file (required).
--- There is no explicitly required filetype, but the script
-    anticipates a text file or something that functions as such
-    per python's file writing.
+- Cleaned up some comment sections that were unchanged between
+  the initial file and the prior update.
 
-- The node file command line argument is no longer required.
--- It is now a flag, "--nodeFile".
--- If no node file is provided, the script will automatically
-    generate the list of nodes based off of the edge file.
--- Inclusion of a node file would retain the old functionality
-    of marking some graph nodes as unable to be eliminated
-    (by only representing them in the edge file).
+- Adjusted command line arguments.
+-- --nodefile now accepts the file name as the following
+-- argument, rather than the "--nodefile=" notation.
+-- --nodefile is now fully lowercase.
+-- --high now functions purely on inclusion, rather than
+-- requiring a string following it with the "--high=" notation.
 
-- Added a command line flag, "--perline", to dictate how many
-    nodes are displayed per line in the terminal output.
--- The default value is 5.
+- Added the --untouched flag.
+-- Optional flag as described below.
+-- Including it adds a new sorting method as second priority.
 
-- Refined terminal output to something easier to read
--- It is now of the form "nodeA -> nodeB -> nodeC..."
+- Added a new function, mostEdgeLeastTouched. Described below.
+-- This function is called when --untouched is included, as
+    it requires more information to be stored while determining
+    node order.
 
-- Added a new function, nodesAndEdgesFromFile(f)
--- f is a string containing the file path to the chosen file.
--- This is used when no node file is provided to generate
-    the node list, as mentioned above.
-
-- Added a new function, output()
--- This function determines which file read functions
-    to call based on provided arguments.
--- It prints the node elimination order into the terminal
-    as per the --perline flag and the format stated above.
--- It also stores the nodes, one per line, into the output
-    file.
-
-- Added a new functiion, multirun(n)
--- This function loops n times, running output() once
-    per loop.
--- It also makes use of datetime to gather the total
-    runtime of each call to output(), then averages
-    the time taken.
--- This is a utility function for testing runtimes
-    of the bulk of the computations.
-
+- Sorting the dictionary in nodePriority (and by extension
+  mostEdgeLeastTouched) and selecting the desired node has
+  been slightly simplified for a second time.
+-- The first time, in the prior update, was undocumented.
 '''
 
 # datetime present exclusively to gauge runtimes
@@ -63,27 +44,37 @@ print(startTime)
 '''
 Generates a parser with the following arguments:
 
-nodeFile, type: .txt file
-- A text file containing a list of names for every node in the graph.
-- Each line in the file is a single node name.
-
 edgeFile, type: .txt or .csv file
 - A text file containing a list of every edge in the graph.
 - Each line is of the form "A,B" where A and B are node names.
 
---high, optional, type: string
-- If provided any value (such as "--high=true") in the command line,
-- the sorting will prioritize the highest alphanumeric node name
-- when multiple nodes share the same number of edges.
+--nodefile, type: .txt file
+- A text file containing a list of names for every node in the graph.
+- Each line in the file is a single node name.
+- The flag is optional. It must be followed by the file name for the nodes.
+
+--high, optional
+- If the flag is used, the sorting will prioritize the highest
+- alphanumeric node name when multiple nodes share the same 
+- number of edges.
 -
-- If the flag is missing or set to "--high=false"), it will sort
-- lowest-first instead.
+- If the flag is missing, it will sort lowest-first instead.
+
+--untouched, optional
+- If the flag is used, the sorting will prioritize the node with the 
+- least connections to any removed nodes. This occurs prior to 
+- the --high flag for breaking ties.
+
+--perline, optional, type: int
+- If provided a number >= 1, it will display a number of nodes
+- per line in the terminal equal to the value given.
 '''
 parser = argparse.ArgumentParser()
 parser.add_argument("outputFile")
 parser.add_argument("edgeFile")
-parser.add_argument("--nodeFile", required=False)
-parser.add_argument("--high", default="false", type=str)
+parser.add_argument("--nodefile", action="store")
+parser.add_argument("--high", action="store_true")
+parser.add_argument("--untouched", action="store_true")
 parser.add_argument("--perline", default=5, type=int)
 args = parser.parse_args()
 
@@ -162,7 +153,9 @@ def nodesAndEdgesFromFile(f):
 
 
 '''
-nodePriority takes 3 arguments: nodes, edges, high.
+nodePriority takes 2 arguments: nodesEdges, high.
+
+nodesEdges is a tuple containing nodes and edges.
 
 nodes is a set, as per the output of nodesFromFile,
 which contains every node present in the graph.
@@ -219,9 +212,8 @@ node list.
 def nodePriority(nodesEdges, high):
     nodes = nodesEdges[0]
     edges = nodesEdges[1]
-    flip = (high.lower() == "true")
     flipper = -1
-    if flip:
+    if high:
         flipper = 1
 
     retOrder = []
@@ -231,9 +223,47 @@ def nodePriority(nodesEdges, high):
             nodeEdgeCount[node] = 0
         for edge in edges:
             for node in edge:
-                nodeEdgeCount[node] += 1
+                if node in nodeEdgeCount:
+                    nodeEdgeCount[node] += 1
 
-        maxEdge = next(iter(dict(sorted(nodeEdgeCount.items(), key=lambda item: (flipper*item[1], item[0]), reverse=flip)).keys()))
+        maxEdge = (sorted(nodeEdgeCount.items(), key=lambda item: (flipper*item[1], item[0]), reverse=high))[0][0]
+        nodes.remove(maxEdge)
+        edges = [edge for edge in edges if not maxEdge in edge]
+        retOrder.append(maxEdge)
+    return retOrder
+
+'''
+mostEdgeLeastTouched takes two arguments: nodesEdges, high
+
+This is an altered version of nodePriority (above).
+It is used when the optional flag "--
+'''
+def mostEdgeLeastTouched(nodesEdges, high):
+    nodes = nodesEdges[0]
+    edges = nodesEdges[1]
+    high
+    flipper = -1
+    if high:
+        flipper = 1
+
+    retOrder = []
+    adjCount = {}
+    for node in nodes:
+        adjCount[node] = 0
+        
+    while nodes:
+        nodeEdgeList = {}
+        for node in nodes:
+            nodeEdgeList[node] = []
+        for edge in edges:
+            for node in edge:
+                nodeEdgeList[node].append(list(edge.difference(node))[0])
+
+        maxEdge = (sorted(nodeEdgeList.items(), key=lambda item: (flipper*len(item[1]), adjCount[item[0]], item[0]), reverse=high))[0][0]
+
+        for touch in nodeEdgeList[maxEdge]:
+            adjCount[touch] += 1
+
         nodes.remove(maxEdge)
         edges = [edge for edge in edges if not maxEdge in edge]
         retOrder.append(maxEdge)
@@ -276,10 +306,17 @@ nodeF -> nodeG -> nodeH
 '''
 def output():
     retOrder = []
-    if args.nodeFile:
-        retOrder = nodePriority((nodesFromFile(args.nodeFile), edgesFromFile(args.edgeFile)), args.high)
+
+    if args.nodefile:
+        tupNE = (nodesFromFile(args.nodefile), edgesFromFile(args.edgeFile))
     else:
-        retOrder = nodePriority(nodesAndEdgesFromFile(args.edgeFile), args.high)
+        tupNE = nodesAndEdgesFromFile(args.edgeFile)
+
+    if args.untouched:
+        retOrder = mostEdgeLeastTouched(tupNE, args.high)
+    else:
+        retOrder = nodePriority(tupNE, args.high)
+
     outStr = ""
     first = True
     num = 0
