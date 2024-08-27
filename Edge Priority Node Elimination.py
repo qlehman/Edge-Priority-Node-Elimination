@@ -1,31 +1,19 @@
 '''
 Changelog
 
-Aug 14 (feature-testing branch creation) -> Aug 14 (current)
+Aug 14 (additional sort implementation) -> Aug 27 (current)
 
-- Cleaned up some comment sections that were unchanged between
-  the initial file and the prior update.
+- mostEdgeLeastTouched no longer sorts by highest removed
+  edges when the "--high" flag is used. "--high" now only
+  impacts alphanumeric ordering, as intended.
 
-- Adjusted command line arguments.
--- --nodefile now accepts the file name as the following
--- argument, rather than the "--nodefile=" notation.
--- --nodefile is now fully lowercase.
--- --high now functions purely on inclusion, rather than
--- requiring a string following it with the "--high=" notation.
-
-- Added the --untouched flag.
--- Optional flag as described below.
--- Including it adds a new sorting method as second priority.
-
-- Added a new function, mostEdgeLeastTouched. Described below.
--- This function is called when --untouched is included, as
-    it requires more information to be stored while determining
-    node order.
-
-- Sorting the dictionary in nodePriority (and by extension
-  mostEdgeLeastTouched) and selecting the desired node has
-  been slightly simplified for a second time.
--- The first time, in the prior update, was undocumented.
+- mostEdgeLeastTouched did not properly add the correct
+  node when scanning through edges. This would result in
+  some connecting edges adding the examined node to the
+  list of connections, rather than the proper connected
+  node.
+  
+- Unfinished comments for mostEdgeLeastTouched were added.
 '''
 
 # datetime present exclusively to gauge runtimes
@@ -236,7 +224,39 @@ def nodePriority(nodesEdges, high):
 mostEdgeLeastTouched takes two arguments: nodesEdges, high
 
 This is an altered version of nodePriority (above).
-It is used when the optional flag "--
+It is used when the optional flag "--untouched" is used.
+
+The following changes are made compared to nodePriority:
+
+a) There is another dictionary, which is not reset upon
+  selecting a node, that tracks how many edges a given
+  node has such that the edge's other node was already
+  selected.
+b) The dictionary that used to track the number of edges
+  still connected to a node now has a list of the nodes
+  these remaining edges connect to.
+c) After sorting by the number of remaining edges, an
+  additional sort is performed based on the new dictionary
+  from (a). A node with fewer edges connecting to already
+  selected nodes will always be selected first between
+  nodes of the same number of remaining edges. This is
+  regardless of the "--high" flag being used.
+
+NOTE: If sorting by the most number of removed edges
+is deemed useful behavior, adding a circumstantial flag
+would be awkward. 
+
+It would likely require either:
+a) two flags, such that both call this function independently,
+  but change the order of this additional sort
+b) two flags, such that the second is useless without calling
+  the current "--untouched" flag as well, to dictate the sort order
+c) tying together this sort order with the alphanumeric order.
+
+(c) was unintentional behavior prior and would be easiest to implement
+simply by removing the check for the "--high" flag -- removing the
+"-1*flipper*" preceding the "adjCount[item[0]]" below.
+
 '''
 def mostEdgeLeastTouched(nodesEdges, high):
     nodes = nodesEdges[0]
@@ -257,9 +277,9 @@ def mostEdgeLeastTouched(nodesEdges, high):
             nodeEdgeList[node] = []
         for edge in edges:
             for node in edge:
-                nodeEdgeList[node].append(list(edge.difference(node))[0])
+                nodeEdgeList[node].append(list(set(edge).difference({node}))[0])
 
-        maxEdge = (sorted(nodeEdgeList.items(), key=lambda item: (flipper*len(item[1]), adjCount[item[0]], item[0]), reverse=high))[0][0]
+        maxEdge = (sorted(nodeEdgeList.items(), key=lambda item: (flipper*len(item[1]), -1*flipper*adjCount[item[0]], item[0]), reverse=high))[0][0]
 
         for touch in nodeEdgeList[maxEdge]:
             adjCount[touch] += 1
